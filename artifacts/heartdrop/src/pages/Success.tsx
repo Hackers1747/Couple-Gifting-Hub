@@ -86,6 +86,20 @@ export default function Success() {
     `I made something special for you 💝\n\nhttps://${shareUrl}`
   );
 
+  const canNativeShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  async function nativeShare() {
+    try {
+      await navigator.share({
+        title: "HeartDrop 💝",
+        text: `I made something special for ${recipientName}!`,
+        url: `https://${shareUrl}`,
+      });
+    } catch {
+      // dismissed — no-op
+    }
+  }
+
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center px-4 py-12" style={{ maxWidth: 430, margin: "0 auto" }}>
       <motion.div
@@ -123,6 +137,20 @@ export default function Success() {
         </div>
 
         <div className="space-y-3 mb-8">
+          {canNativeShare && (
+            <motion.button
+              whileTap={{ scale: 0.97 }}
+              onClick={nativeShare}
+              className="w-full py-4 rounded-2xl font-semibold text-white text-base flex items-center justify-center gap-2"
+              style={{
+                background: "linear-gradient(135deg, #B76E79 0%, #8B4E5A 100%)",
+                boxShadow: "0 4px 24px rgba(183,110,121,0.4)",
+              }}
+            >
+              <span>📤</span> Share
+            </motion.button>
+          )}
+
           <motion.a
             whileTap={{ scale: 0.97 }}
             href={`https://wa.me/?text=${whatsappText}`}

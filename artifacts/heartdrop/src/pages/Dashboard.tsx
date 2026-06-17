@@ -84,6 +84,19 @@ export default function Dashboard() {
   const [showReminderModal, setShowReminderModal] = useState(false);
   const [loveDrop, setLoveDrop] = useState(true);
   const [copied, setCopied] = useState<string | null>(null);
+  const canNativeShare = typeof navigator !== "undefined" && !!navigator.share;
+
+  async function nativeShareCard(token: string, recipientName: string) {
+    try {
+      await navigator.share({
+        title: "HeartDrop 💝",
+        text: `A surprise for ${recipientName}!`,
+        url: `https://heartdrop.in/card/${token}`,
+      });
+    } catch {
+      // dismissed
+    }
+  }
 
   const totalOpens = cards.filter((c) => c.status === "opened" || c.status === "reacted").length;
   const totalReacted = cards.filter((c) => c.status === "reacted").length;
@@ -208,6 +221,16 @@ export default function Dashboard() {
                   )}
 
                   <div className="flex gap-2 mt-3">
+                    {canNativeShare && (
+                      <motion.button
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => nativeShareCard(card.shareToken, card.recipientName)}
+                        className="flex-1 py-2 rounded-xl text-xs font-medium"
+                        style={{ background: "rgba(183,110,121,0.1)", color: "#B76E79", border: "1px solid rgba(183,110,121,0.2)" }}
+                      >
+                        📤 Share
+                      </motion.button>
+                    )}
                     <motion.button
                       whileTap={{ scale: 0.95 }}
                       onClick={() => copyLink(card.shareToken)}

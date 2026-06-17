@@ -22,4 +22,7 @@ app.listen(port, (err) => {
   }
 
   logger.info({ port }, "Server listening");
+
+  // Start cron jobs after server is ready
+  import("./cron").catch((e) => logger.error({ err: e }, "Cron init failed"));
 });
