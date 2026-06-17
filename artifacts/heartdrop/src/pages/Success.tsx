@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import confetti from "canvas-confetti";
 import QRCode from "qrcode";
 import jsPDF from "jspdf";
+import QRCard from "@/components/QRCard";
 
 export default function Success() {
   const [, navigate] = useLocation();
@@ -181,6 +182,14 @@ export default function Success() {
           >
             <span>📊</span> Go to Dashboard
           </motion.button>
+        </div>
+
+        <div className="mb-6">
+          <QRCard token={shareToken} recipientName={recipientName} />
+          <p className="text-gray-500 text-xs text-center mt-2">
+            Print this QR and put it in a physical card 🎁<br />
+            Receiver scans → digital experience opens
+          </p>
         </div>
 
         <div className="rounded-2xl p-4"
