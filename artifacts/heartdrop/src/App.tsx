@@ -9,6 +9,7 @@ import Preview from "@/pages/Preview";
 import Payment from "@/pages/Payment";
 import Card from "@/pages/Card";
 import Dashboard from "@/pages/Dashboard";
+import Success from "@/pages/Success";
 import ExpiredCard from "@/pages/ExpiredCard";
 
 const queryClient = new QueryClient();
@@ -22,6 +23,7 @@ function Router() {
       <Route path="/payment/:id" component={Payment} />
       <Route path="/card/:slug" component={Card} />
       <Route path="/dashboard" component={Dashboard} />
+      <Route path="/success" component={Success} />
       <Route path="/expired" component={ExpiredCard} />
       <Route component={NotFound} />
     </Switch>
