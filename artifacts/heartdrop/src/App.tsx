@@ -11,6 +11,7 @@ import Card from "@/pages/Card";
 import Dashboard from "@/pages/Dashboard";
 import Success from "@/pages/Success";
 import ExpiredCard from "@/pages/ExpiredCard";
+import InstallBanner from "@/components/InstallBanner";
 
 const queryClient = new QueryClient();
 
@@ -36,6 +37,7 @@ function App() {
       <TooltipProvider>
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />
+          <InstallBanner />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>
