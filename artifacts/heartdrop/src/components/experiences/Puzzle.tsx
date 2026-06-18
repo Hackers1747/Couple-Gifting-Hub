@@ -27,7 +27,7 @@ export default function PuzzleCard({ card, onReact }: { card: CardData; onReact:
   const [showReveal, setShowReveal] = useState(false);
   const [revealed, setRevealed] = useState(false);
   const [showReactions, setShowReactions] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout>>();
+  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const photoUrl = card.photos[0];
 
   useEffect(() => {
