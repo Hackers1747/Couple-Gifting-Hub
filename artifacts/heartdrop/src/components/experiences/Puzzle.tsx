@@ -1,194 +1,210 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import EmojiReactions from "@/components/card/EmojiReactions";
-import ViralCTA from "@/components/card/ViralCTA";
+import { CardExperienceLayout } from "@/components/cards/CardExperienceLayout";
 import type { CardData } from "@/hooks/useCardData";
 
-function scramble(n: number): number[] {
-  const arr = Array.from({ length: n }, (_, i) => i);
-  for (let i = arr.length - 1; i > 0; i--) {
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const GRID = 3;
+const TOTAL = GRID * GRID;
+const EMPTY = TOTAL - 1; // index of the blank tile value
+
+// Module-level so it's never recreated and is safe in useEffect deps
+const SOLVED_STR = Array.from({ length: TOTAL }, (_, i) => i).join(",");
+
+const EMOJIS = ["💜", "🌟", "✨", "💫", "🔮", "💎", "🌙", "⭐"] as const;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function shuffle(arr: number[]): number[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [arr[i], arr[j]] = [arr[j], arr[i]];
+    [a[i], a[j]] = [a[j], a[i]];
   }
-  return arr;
+  return a;
 }
 
-function isSolved(tiles: number[]) {
-  return tiles.every((t, i) => t === i);
+function freshBoard() {
+  return shuffle(Array.from({ length: TOTAL }, (_, i) => i));
 }
 
-export default function PuzzleCard({ card, onReact }: { card: CardData; onReact: (e: string) => void }) {
-  const SIZE = 3;
-  const TOTAL = SIZE * SIZE;
-  const [tiles, setTiles] = useState<number[]>(() => scramble(TOTAL));
-  const [selected, setSelected] = useState<number | null>(null);
+// ── Geometric background ──────────────────────────────────────────────────────
+// Shapes are memoised at mount — Math.random() in JSX re-randomises every
+// repaint which causes visible layout jumps as the puzzle re-renders.
+
+interface GeoShape {
+  id: number;
+  sizePx: number;
+  topPct: number;
+  leftPct: number;
+  isCircle: boolean;
+  duration: number;
+}
+
+function GeoBg({ shapes }: { shapes: GeoShape[] }) {
+  return (
+    <div className="fixed inset-0 pointer-events-none z-0 overflow-hidden opacity-10">
+      {shapes.map((s) => (
+        <motion.div
+          key={s.id}
+          className="absolute border border-[#a96ec9]"
+          style={{
+            width: s.sizePx,
+            height: s.sizePx,
+            top: `${s.topPct}%`,
+            left: `${s.leftPct}%`,
+            borderRadius: s.isCircle ? "50%" : "4px",
+          }}
+          animate={{ rotate: [0, 360], opacity: [0.3, 0.6, 0.3] }}
+          transition={{ duration: s.duration, repeat: Infinity, ease: "linear" }}
+        />
+      ))}
+    </div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+interface PuzzleCardProps {
+  card: CardData;
+  onReact: (emoji: string) => void;
+}
+
+export default function PuzzleCard({ card, onReact }: PuzzleCardProps) {
+  const [tiles, setTiles] = useState<number[]>(freshBoard);
   const [solved, setSolved] = useState(false);
-  const [sparkle, setSparkle] = useState(false);
-  const [showReveal, setShowReveal] = useState(false);
-  const [revealed, setRevealed] = useState(false);
-  const [showReactions, setShowReactions] = useState(false);
-  const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-  const photoUrl = card.photos[0];
+  const [moves, setMoves] = useState(0);
 
+  // Stable geo shapes — computed once on mount
+  const geoShapes = useMemo<GeoShape[]>(
+    () =>
+      Array.from({ length: 8 }, (_, i) => ({
+        id: i,
+        sizePx: Math.random() * 120 + 60,
+        topPct: Math.random() * 100,
+        leftPct: Math.random() * 100,
+        isCircle: Math.random() > 0.5,
+        duration: Math.random() * 10 + 8,
+      })),
+    [],
+  );
+
+  // SOLVED_STR is module-level (never changes) so this effect is safe
   useEffect(() => {
-    timerRef.current = setTimeout(() => setShowReveal(true), 60000);
-    return () => clearTimeout(timerRef.current);
-  }, []);
+    if (tiles.join(",") === SOLVED_STR) setSolved(true);
+  }, [tiles]);
 
-  const handleTap = (idx: number) => {
-    if (solved) return;
-    if (selected === null) {
-      setSelected(idx);
-    } else {
-      if (selected === idx) { setSelected(null); return; }
-      const next = [...tiles];
-      [next[selected], next[idx]] = [next[idx], next[selected]];
-      setTiles(next);
-      setSelected(null);
-      if (isSolved(next)) {
-        setSolved(true);
-        setSparkle(true);
-        clearTimeout(timerRef.current);
-        setTimeout(() => setShowReactions(true), 1400);
-      }
-    }
-  };
+  const emptyIdx = tiles.indexOf(EMPTY);
 
-  const doReveal = () => {
-    setRevealed(true);
-    setTiles(Array.from({ length: TOTAL }, (_, i) => i));
-    setSolved(true);
-    setTimeout(() => setShowReactions(true), 800);
-  };
+  function canMove(idx: number) {
+    const row = Math.floor(idx / GRID);
+    const col = idx % GRID;
+    const eRow = Math.floor(emptyIdx / GRID);
+    const eCol = emptyIdx % GRID;
+    return Math.abs(row - eRow) + Math.abs(col - eCol) === 1;
+  }
 
-  const tileSize = Math.min(340, window.innerWidth - 40);
-  const cellSize = tileSize / SIZE;
+  function moveTile(idx: number) {
+    if (!canMove(idx) || solved) return;
+    setTiles((prev) => {
+      const next = [...prev];
+      [next[idx], next[emptyIdx]] = [next[emptyIdx], next[idx]];
+      return next;
+    });
+    setMoves((m) => m + 1);
+  }
+
+  function reset() {
+    setTiles(freshBoard());
+    setSolved(false);
+    setMoves(0);
+  }
 
   return (
-    <div className="min-h-screen pb-10" style={{ background: "#141414" }}>
-      <div className="flex flex-col items-center px-5 pt-10">
-        <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}>
-          <p className="text-[#B76E79] text-xs uppercase tracking-widest text-center mb-1">
-            From {card.senderName}
+    <>
+      <GeoBg shapes={geoShapes} />
+
+      <CardExperienceLayout
+        cardType="puzzle"
+        senderName={card.senderName}
+        recipientName={card.recipientName}
+        message={card.message}
+        isWatermarked={card.isWatermarked}
+        onReact={onReact}
+        reactionsDelay={solved ? 800 : 99999}
+      >
+        {/* ── Experience-specific content ── */}
+        <div className="flex items-center justify-between w-full">
+          <p className="text-[#8a8a9a] text-sm">
+            Moves:{" "}
+            <span className="text-[#a96ec9] font-medium">{moves}</span>
           </p>
-          <h1 className="font-serif text-2xl text-white text-center mb-2">
-            Solve the puzzle, {card.recipientName} 🧩
-          </h1>
-          {!solved && (
-            <p className="text-[#666] text-sm text-center mb-5">
-              Tap a tile, then tap where to move it
-            </p>
-          )}
-        </motion.div>
+          <button
+            onClick={reset}
+            className="text-xs border border-white/20 text-white/50 px-3 py-1.5 rounded-full hover:border-[#a96ec9]/40 hover:text-[#a96ec9] transition-all duration-300"
+          >
+            Shuffle
+          </button>
+        </div>
 
-        {/* Puzzle grid */}
+        {/* Tile grid */}
         <div
-          className="relative mb-6 rounded-2xl overflow-hidden"
-          style={{ width: tileSize, height: tileSize }}
+          className="grid gap-2"
+          style={{ gridTemplateColumns: `repeat(${GRID}, 1fr)`, width: "270px" }}
         >
-          {tiles.map((tileIdx, position) => {
-            const row = Math.floor(tileIdx / SIZE);
-            const col = tileIdx % SIZE;
-            const bgX = -(col * cellSize);
-            const bgY = -(row * cellSize);
-            const isSelected = selected === position;
-
+          {tiles.map((tile, idx) => {
+            const isBlank = tile === EMPTY;
+            const movable = canMove(idx);
             return (
               <motion.button
-                key={tileIdx}
-                layout
-                animate={{
-                  outline: isSelected ? "3px solid #B76E79" : "1px solid rgba(255,255,255,0.08)",
-                  scale: isSelected ? 0.95 : 1,
-                }}
-                transition={{ type: "spring", stiffness: 400, damping: 30 }}
-                onClick={() => handleTap(position)}
-                className="absolute"
-                style={{
-                  width: cellSize - 2,
-                  height: cellSize - 2,
-                  left: (position % SIZE) * cellSize + 1,
-                  top: Math.floor(position / SIZE) * cellSize + 1,
-                  backgroundImage: photoUrl ? `url(${photoUrl})` : undefined,
-                  backgroundSize: `${tileSize}px ${tileSize}px`,
-                  backgroundPosition: `${bgX}px ${bgY}px`,
-                  backgroundColor: !photoUrl ? `hsl(${tileIdx * 40}, 50%, 30%)` : undefined,
-                  cursor: "pointer",
-                }}
+                key={tile}
+                onClick={() => moveTile(idx)}
+                whileHover={movable ? { scale: 1.05 } : {}}
+                whileTap={movable ? { scale: 0.95 } : {}}
+                className={[
+                  "w-[82px] h-[82px] rounded-xl flex items-center justify-center text-2xl",
+                  "transition-all duration-200 font-serif",
+                  isBlank
+                    ? "bg-transparent border border-dashed border-white/10"
+                    : movable
+                    ? "bg-[#a96ec9]/20 border border-[#a96ec9]/40 hover:bg-[#a96ec9]/30 cursor-pointer"
+                    : "bg-[#13132a] border border-white/[0.06] cursor-default",
+                ].join(" ")}
               >
-                {!photoUrl && (
-                  <span className="text-white font-bold text-lg opacity-50">{tileIdx + 1}</span>
-                )}
+                {!isBlank && <span>{EMOJIS[tile % EMOJIS.length]}</span>}
               </motion.button>
             );
           })}
-
-          {/* Sparkle overlay */}
-          <AnimatePresence>
-            {sparkle && (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: [0, 1, 0] }}
-                transition={{ duration: 1.2 }}
-                className="absolute inset-0 flex items-center justify-center pointer-events-none"
-                style={{ background: "rgba(183,110,121,0.35)" }}
-              >
-                <span className="text-5xl">✨</span>
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
-        {/* Reveal button after 60s */}
-        <AnimatePresence>
-          {showReveal && !solved && (
-            <motion.button
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0 }}
-              onClick={doReveal}
-              className="btn-pill px-6 py-2.5 text-sm font-medium mb-5"
-              style={{ background: "rgba(183,110,121,0.12)", color: "#B76E79", border: "1px solid rgba(183,110,121,0.3)" }}
-            >
-              Reveal? 👀
-            </motion.button>
-          )}
-        </AnimatePresence>
-
-        {/* Message after solve */}
+        {/* Solved state */}
         <AnimatePresence>
           {solved && (
             <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-              className="w-full"
+              initial={{ opacity: 0, scale: 0.8, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              className="flex flex-col items-center gap-4 w-full"
             >
-              {!revealed && (
-                <p className="font-serif text-xl text-white text-center mb-4">
-                  You solved it! 🎉
+              <div className="bg-[#a96ec9]/10 border border-[#a96ec9]/30 rounded-2xl p-6 text-center w-full">
+                <p className="text-3xl mb-2">🎉</p>
+                <p className="font-serif text-xl text-[#f5f0e8]">Puzzle Solved!</p>
+                <p className="text-[#8a8a9a] text-sm mt-1">
+                  {moves} moves mein solve kiya
                 </p>
-              )}
-              <div
-                className="rounded-2xl border p-5 mb-6"
-                style={{ borderColor: "rgba(183,110,121,0.25)", background: "rgba(183,110,121,0.05)" }}
-              >
-                <p className="font-serif italic text-[#ddd] text-sm leading-relaxed text-center">
-                  "{card.message}"
-                </p>
-                <p className="text-right text-[#B76E79] text-xs mt-3">— {card.senderName}</p>
               </div>
+
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full bg-gradient-to-r from-[#a96ec9] to-[#c9a96e] text-white font-semibold px-8 py-4 rounded-full hover:shadow-[0_0_24px_rgba(169,110,201,0.4)] transition-all duration-300"
+              >
+                💜 Claim Your Reward
+              </motion.button>
             </motion.div>
           )}
         </AnimatePresence>
-
-        {showReactions && (
-          <>
-            <div className="w-full"><EmojiReactions onReact={onReact} /></div>
-            <ViralCTA experience={card.experience} />
-          </>
-        )}
-      </div>
-    </div>
+      </CardExperienceLayout>
+    </>
   );
 }
