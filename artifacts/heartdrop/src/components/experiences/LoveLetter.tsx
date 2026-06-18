@@ -1,187 +1,152 @@
-import { useState, useEffect } from "react";
+import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import EmojiReactions from "@/components/card/EmojiReactions";
-import ViralCTA from "@/components/card/ViralCTA";
+import { CardExperienceLayout } from "@/components/cards/CardExperienceLayout";
 import type { CardData } from "@/hooks/useCardData";
 
-function useTypewriter(text: string, delay = 1200, speed = 30) {
-  const [displayed, setDisplayed] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => {
-      let i = 0;
-      const id = setInterval(() => {
-        i++;
-        setDisplayed(text.slice(0, i));
-        if (i >= text.length) clearInterval(id);
-      }, speed);
-      return () => clearInterval(id);
-    }, delay);
-    return () => clearTimeout(t);
-  }, [text, delay, speed]);
-  return displayed;
+// ── Floating heart particle ───────────────────────────────────────────────────
+
+interface FloatingHeartProps {
+  leftVw: number;
+  xKeyframes: [number, number];
+  duration: number;
+  delay: number;
+  isChar: boolean; // ♥ vs ❤️
 }
 
-const PETAL_COLORS = ["#B76E79","#c9818c","#d4899a","#8B4A56","#e8a0ac"];
+function FloatingHeart({ leftVw, xKeyframes, duration, delay, isChar }: FloatingHeartProps) {
+  return (
+    <motion.div
+      className="fixed pointer-events-none z-0 text-lg"
+      style={{ left: `${leftVw}vw`, top: "110vh" }}
+      animate={{
+        y: "-120vh",
+        x: xKeyframes,
+        opacity: [0, 0.6, 0],
+        scale: [0.5, 1, 0.5],
+      }}
+      transition={{ duration, delay, repeat: Infinity, ease: "easeOut" }}
+    >
+      {isChar ? "♥" : "❤️"}
+    </motion.div>
+  );
+}
 
-export default function LoveLetter({ card, onReact }: { card: CardData; onReact: (e: string) => void }) {
+// ── Envelope open toggle ──────────────────────────────────────────────────────
+
+interface EnvelopeOpenProps {
+  opened: boolean;
+  onOpen: () => void;
+}
+
+function EnvelopeOpen({ opened, onOpen }: EnvelopeOpenProps) {
+  return (
+    <motion.div
+      className="flex flex-col items-center gap-4 cursor-pointer"
+      onClick={onOpen}
+    >
+      <motion.div
+        animate={opened ? { scale: 0, opacity: 0 } : { scale: [1, 1.05, 1] }}
+        transition={{ duration: 2, repeat: opened ? 0 : Infinity }}
+        className="text-7xl"
+      >
+        💌
+      </motion.div>
+      {!opened && (
+        <motion.p
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="text-[#8a8a9a] text-sm"
+        >
+          Tap to open your letter
+        </motion.p>
+      )}
+    </motion.div>
+  );
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
+
+interface LoveLetterCardProps {
+  card: CardData;
+  onReact: (emoji: string) => void;
+}
+
+export default function LoveLetterCard({ card, onReact }: LoveLetterCardProps) {
   const [opened, setOpened] = useState(false);
-  const [letterVisible, setLetterVisible] = useState(false);
-  const [showReactions, setShowReactions] = useState(false);
-  const displayedMsg = useTypewriter(card.message, 1400);
 
-  const petals = Array.from({ length: 14 }, (_, i) => ({
-    id: i, left: `${Math.random() * 95}%`,
-    delay: `${i * 0.5}s`, dur: `${5 + (i % 4)}s`,
-    rotate: `${Math.random() * 360}deg`,
-    color: PETAL_COLORS[i % PETAL_COLORS.length],
-    size: 8 + (i % 3) * 4,
-  }));
-
-  const handleOpen = () => {
-    setOpened(true);
-    setTimeout(() => {
-      setLetterVisible(true);
-      setTimeout(() => setShowReactions(true), 3200);
-    }, 600);
-  };
+  const hearts = useMemo(
+    () =>
+      Array.from({ length: 8 }, (_, i) => ({
+        id: i,
+        leftVw: Math.random() * 100,
+        xKeyframes: [(Math.random() - 0.5) * 80, (Math.random() - 0.5) * 80] as [number, number],
+        duration: Math.random() * 5 + 5,
+        delay: i * 0.7,
+        isChar: Math.random() > 0.5,
+      })),
+    [],
+  );
 
   return (
     <>
-      <style>{`
-        @keyframes petalFall {
-          0%   { transform:translateY(-20px) rotate(0deg); opacity:0.8; }
-          100% { transform:translateY(100vh) rotate(360deg); opacity:0; }
-        }
-      `}</style>
+      {hearts.map((h) => (
+        <FloatingHeart key={h.id} {...h} />
+      ))}
 
-      <div className="relative min-h-screen bg-[#0A0A0A] overflow-hidden pb-10">
-        {/* Rose petals */}
-        {petals.map((p) => (
-          <div
-            key={p.id}
-            className="fixed pointer-events-none rounded-full"
-            style={{
-              left: p.left, top: "-20px", width: p.size, height: p.size * 0.6,
-              background: p.color, borderRadius: "50% 0 50% 0",
-              opacity: 0.5,
-              animation: `petalFall ${p.dur} ${p.delay} infinite linear`,
-            }}
-          />
-        ))}
+      <CardExperienceLayout
+        cardType="loveletter"
+        senderName={card.senderName}
+        recipientName={card.recipientName}
+        message={card.message}
+        isWatermarked={card.isWatermarked}
+        onReact={onReact}
+        reactionsDelay={opened ? 800 : 99999}
+      >
+        {/* ── Experience-specific content ── */}
+        <EnvelopeOpen opened={opened} onOpen={() => setOpened(true)} />
 
-        <div className="relative z-10 flex flex-col items-center px-5 pt-12">
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-[#B76E79] text-xs uppercase tracking-widest mb-2"
-          >
-            A letter for you
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="font-serif text-3xl text-white text-center mb-10"
-          >
-            My dearest {card.recipientName} 💌
-          </motion.h1>
-
-          {/* Envelope */}
-          <div className="relative w-full max-w-[320px] mb-4">
-            {/* Envelope body */}
+        <AnimatePresence>
+          {opened && (
             <motion.div
-              initial={{ opacity: 0, scale: 0.85 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-              className="relative w-full rounded-2xl overflow-hidden"
-              style={{
-                background: "linear-gradient(135deg, rgba(183,110,121,0.2) 0%, rgba(139,74,86,0.1) 100%)",
-                border: "1px solid rgba(183,110,121,0.35)",
-                minHeight: 200,
-              }}
+              initial={{ opacity: 0, y: 30, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.5, ease: "easeOut" }}
+              className="w-full"
             >
-              {/* Envelope flap */}
-              <motion.div
-                className="absolute top-0 left-0 right-0 overflow-hidden"
-                style={{ height: 100, transformOrigin: "top", zIndex: 2 }}
-                animate={opened ? { rotateX: -180, opacity: 0 } : { rotateX: 0, opacity: 1 }}
-                transition={{ duration: 0.6, ease: "easeInOut" }}
-              >
-                <svg viewBox="0 0 320 100" className="w-full" style={{ display: "block" }}>
-                  <polygon points="0,0 160,85 320,0" fill="rgba(183,110,121,0.35)" />
-                  <polygon points="0,0 160,85 320,0" fill="none" stroke="rgba(183,110,121,0.4)" strokeWidth="1" />
-                  {/* Wax seal */}
-                  {!opened && (
-                    <circle cx="160" cy="60" r="18" fill="#B76E79" opacity="0.9" />
-                  )}
-                  {!opened && (
-                    <text x="160" y="65" textAnchor="middle" fill="white" fontSize="16">❤</text>
-                  )}
-                </svg>
-              </motion.div>
-
-              {/* Envelope content area */}
-              <div className="pt-[90px] pb-8 px-6 flex flex-col items-center">
-                <AnimatePresence>
-                  {!opened && (
-                    <motion.button
-                      exit={{ opacity: 0, scale: 0.8 }}
-                      onClick={handleOpen}
-                      className="flex flex-col items-center gap-2 mt-4"
-                    >
-                      <span className="text-4xl">💌</span>
-                      <span className="text-sm text-[#B76E79] font-medium">Tap to open</span>
-                    </motion.button>
-                  )}
-                </AnimatePresence>
-
-                {/* Letter slides up */}
-                <AnimatePresence>
-                  {letterVisible && (
-                    <motion.div
-                      initial={{ y: 60, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ duration: 0.6, ease: "easeOut" }}
-                      className="w-full"
-                    >
-                      <div
-                        className="rounded-xl p-5 w-full"
-                        style={{
-                          background: "rgba(255,255,255,0.04)",
-                          border: "1px solid rgba(183,110,121,0.15)",
-                        }}
-                      >
-                        <p
-                          className="text-[#f0e6e8] leading-[1.9] text-sm"
-                          style={{ fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic" }}
-                        >
-                          {displayedMsg}
-                          {displayedMsg.length < card.message.length && (
-                            <span className="animate-pulse">|</span>
-                          )}
-                        </p>
-                        <p
-                          className="text-right mt-5 text-[#B76E79] text-sm"
-                          style={{ fontFamily: "'Playfair Display', Georgia, serif", fontStyle: "italic" }}
-                        >
-                          — {card.senderName}
-                        </p>
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
+              {/* Lined-paper letter */}
+              <div className="bg-white/[0.04] border border-[#c9a96e]/20 rounded-2xl p-6 relative overflow-hidden">
+                <div
+                  className="absolute inset-0 opacity-[0.03] pointer-events-none"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(0deg, transparent, transparent 28px, #c9a96e 28px, #c9a96e 29px)",
+                  }}
+                />
+                <p className="font-serif italic text-[#f5f0e8] text-base leading-relaxed relative z-10">
+                  My dearest {card.recipientName},
+                </p>
+                <p className="font-serif italic text-[#f5f0e8]/80 text-sm leading-relaxed mt-3 relative z-10">
+                  {card.message}
+                </p>
+                <p className="font-serif italic text-[#c9a96e] text-sm mt-4 text-right relative z-10">
+                  — {card.senderName} ♥
+                </p>
               </div>
-            </motion.div>
-          </div>
 
-          {showReactions && (
-            <>
-              <div className="w-full mt-4"><EmojiReactions onReact={onReact} /></div>
-              <ViralCTA experience={card.experience} />
-            </>
+              <motion.button
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.4 }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full mt-4 bg-gradient-to-r from-[#c9a96e] to-[#e8c99a] text-[#080810] font-semibold px-8 py-4 rounded-full hover:shadow-[0_0_24px_rgba(201,169,110,0.4)] transition-all duration-300"
+              >
+                💌 Send Love Back
+              </motion.button>
+            </motion.div>
           )}
-        </div>
-      </div>
+        </AnimatePresence>
+      </CardExperienceLayout>
     </>
   );
 }
