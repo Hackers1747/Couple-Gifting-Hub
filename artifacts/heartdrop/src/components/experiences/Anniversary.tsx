@@ -1,185 +1,109 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import EmojiReactions from "@/components/card/EmojiReactions";
-import ViralCTA from "@/components/card/ViralCTA";
+import { CardExperienceLayout } from "@/components/cards/CardExperienceLayout";
 import type { CardData } from "@/hooks/useCardData";
 
-function daysUntilAnniversary(dateStr?: string): number | null {
-  if (!dateStr) return null;
-  const today = new Date();
-  const ann = new Date(dateStr);
-  const next = new Date(today.getFullYear(), ann.getMonth(), ann.getDate());
-  if (next < today) next.setFullYear(today.getFullYear() + 1);
-  return Math.ceil((next.getTime() - today.getTime()) / 86400000);
+// ── Confetti particle ─────────────────────────────────────────────────────────
+// All random values are pre-computed and passed as props so they are stable
+// across re-renders (Math.random() in JSX re-randomises every repaint).
+
+interface ConfettiProps {
+  sizePx: number;
+  leftVw: number;
+  isCircle: boolean;
+  isGold: boolean;
+  xKeyframes: [number, number];
+  duration: number;
+  delay: number;
 }
 
-function yearsSince(dateStr?: string): number {
-  if (!dateStr) return 0;
-  const d = new Date(dateStr);
-  return new Date().getFullYear() - d.getFullYear();
+function Confetti({ sizePx, leftVw, isCircle, isGold, xKeyframes, duration, delay }: ConfettiProps) {
+  return (
+    <motion.div
+      className="fixed pointer-events-none z-0"
+      style={{
+        width: sizePx,
+        height: sizePx,
+        left: `${leftVw}vw`,
+        top: "-10px",
+        background: isGold ? "#c9a96e" : "#e8c99a",
+        borderRadius: isCircle ? "50%" : "2px",
+      }}
+      animate={{
+        y: "110vh",
+        x: xKeyframes,
+        rotate: [0, 360],
+        opacity: [1, 0.8, 0],
+      }}
+      transition={{ duration, delay, repeat: Infinity, ease: "linear" }}
+    />
+  );
 }
 
-export default function Anniversary({ card, onReact }: { card: CardData; onReact: (e: string) => void }) {
-  const days = useMemo(() => daysUntilAnniversary(card.anniversaryDate), [card.anniversaryDate]);
-  const years = useMemo(() => yearsSince(card.anniversaryDate), [card.anniversaryDate]);
+// ── Main component ─────────────────────────────────────────────────────────────
 
-  const hearts = Array.from({ length: 12 }, (_, i) => ({
-    id: i, left: `${5 + i * 8}%`, delay: `${i * 0.6}s`, dur: `${5 + (i % 3)}s`, size: 12 + (i % 3) * 6,
-  }));
+interface AnniversaryCardProps {
+  card: CardData;
+  onReact: (emoji: string) => void;
+}
 
-  const photoRotations = [-4, 3, -2, 5, -3];
+export default function AnniversaryCard({ card, onReact }: AnniversaryCardProps) {
+  const confetti = useMemo(
+    () =>
+      Array.from({ length: 14 }, (_, i) => ({
+        id: i,
+        sizePx: Math.random() * 6 + 3,
+        leftVw: Math.random() * 100,
+        isCircle: Math.random() > 0.5,
+        isGold: Math.random() > 0.5,
+        xKeyframes: [(Math.random() - 0.5) * 60, (Math.random() - 0.5) * 60] as [number, number],
+        duration: Math.random() * 4 + 4,
+        delay: i * 0.4,
+      })),
+    [],
+  );
 
   return (
     <>
-      <style>{`
-        @keyframes floatHeart {
-          0%   { transform:translateY(0) scale(1); opacity:0.6; }
-          100% { transform:translateY(-100vh) scale(0.5); opacity:0; }
-        }
-      `}</style>
+      {confetti.map((c) => (
+        <Confetti key={c.id} {...c} />
+      ))}
 
-      <div className="relative min-h-screen bg-[#0A0A0A] overflow-hidden pb-10">
-        {/* Floating hearts */}
-        {hearts.map((h) => (
-          <div
-            key={h.id}
-            className="fixed pointer-events-none text-[#B76E79]"
-            style={{
-              left: h.left, bottom: "-1rem", fontSize: h.size,
-              animation: `floatHeart ${h.dur} ${h.delay} infinite linear`,
-            }}
-          >
-            ❤️
-          </div>
-        ))}
+      <CardExperienceLayout
+        cardType="anniversary"
+        senderName={card.senderName}
+        recipientName={card.recipientName}
+        message={card.message}
+        isWatermarked={card.isWatermarked}
+        onReact={onReact}
+      >
+        {/* ── Experience-specific content ── */}
+        <motion.div
+          animate={{ scale: [1, 1.15, 1], rotate: [0, 5, -5, 0] }}
+          transition={{ duration: 2.5, repeat: Infinity }}
+          className="text-6xl"
+        >
+          ✨
+        </motion.div>
 
-        <div className="relative z-10 flex flex-col items-center px-5 pt-12">
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="text-[#B76E79] text-xs uppercase tracking-widest mb-2"
-          >
-            From {card.senderName}
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="font-serif text-3xl text-white text-center mb-2"
-          >
-            {years > 0 ? `${years} Beautiful Years` : "Happy Anniversary"}
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ delay: 0.4 }}
-            className="text-[#888] text-sm text-center mb-8"
-          >
-            {card.recipientName}, you're my everything ❤️
-          </motion.p>
-
-          {/* Polaroid photos */}
-          {card.photos.length > 0 && (
-            <div className="relative w-full h-44 mb-10 flex justify-center">
-              {card.photos.slice(0, 5).map((url, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, scale: 0.5, rotate: 0 }}
-                  animate={{ opacity: 1, scale: 1, rotate: photoRotations[i] }}
-                  transition={{ delay: 0.3 + i * 0.15, type: "spring" }}
-                  className="absolute rounded-sm overflow-hidden shadow-xl"
-                  style={{
-                    width: 120, height: 140,
-                    background: "white",
-                    left: `${10 + i * 16}%`,
-                    top: i % 2 === 0 ? 0 : 16,
-                    padding: "6px 6px 24px 6px",
-                    zIndex: i,
-                  }}
-                >
-                  <img src={url} alt="" className="w-full h-full object-cover" style={{ borderRadius: 2 }} />
-                </motion.div>
-              ))}
-            </div>
-          )}
-
-          {/* Message */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5 }}
-            className="rounded-2xl border p-5 w-full mb-8"
-            style={{ borderColor: "rgba(183,110,121,0.25)", background: "rgba(183,110,121,0.05)" }}
-          >
-            <p className="font-serif italic text-[#ddd] text-sm leading-relaxed text-center">
-              "{card.message}"
-            </p>
-            <p className="text-right text-[#B76E79] text-xs mt-3">— {card.senderName}</p>
-          </motion.div>
-
-          {/* Story Timeline */}
-          {card.storyMemories && card.storyMemories.length > 0 && (
-            <div className="w-full mb-8">
-              <h2 className="font-serif text-xl text-white mb-5 text-center">Our Story 📖</h2>
-              <div className="relative">
-                {/* Vertical line */}
-                <div
-                  className="absolute left-1/2 -translate-x-1/2 w-0.5 top-0 bottom-0"
-                  style={{ background: "linear-gradient(to bottom, #B76E79, transparent)" }}
-                />
-                {card.storyMemories.map((mem, i) => {
-                  const isLeft = i % 2 === 0;
-                  return (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: isLeft ? -30 : 30 }}
-                      whileInView={{ opacity: 1, x: 0 }}
-                      viewport={{ once: true }}
-                      transition={{ delay: i * 0.15 }}
-                      className={`relative flex mb-6 ${isLeft ? "pr-[52%]" : "pl-[52%]"}`}
-                    >
-                      {/* Dot */}
-                      <div
-                        className="absolute left-1/2 -translate-x-1/2 w-3 h-3 rounded-full top-3"
-                        style={{ background: "#B76E79" }}
-                      />
-                      <div
-                        className="w-full rounded-xl border p-3"
-                        style={{ borderColor: "rgba(183,110,121,0.2)", background: "rgba(183,110,121,0.05)" }}
-                      >
-                        {mem.date && (
-                          <p className="text-[10px] text-[#B76E79] mb-1 font-medium">
-                            {new Date(mem.date).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
-                          </p>
-                        )}
-                        <p className="text-xs text-[#ccc]">{mem.text}</p>
-                      </div>
-                    </motion.div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Countdown */}
-          {days !== null && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.7 }}
-              className="rounded-2xl border p-5 w-full text-center mb-8"
-              style={{ borderColor: "rgba(183,110,121,0.3)", background: "rgba(183,110,121,0.07)" }}
-            >
-              <p className="text-[#888] text-xs mb-1">Next anniversary in</p>
-              <p className="font-serif text-4xl text-white font-bold">{days}</p>
-              <p className="text-[#B76E79] text-sm">days 🗓</p>
-            </motion.div>
-          )}
-
-          <div className="w-full"><EmojiReactions onReact={onReact} /></div>
-          <ViralCTA experience={card.experience} />
+        <div className="flex items-center gap-3 w-full">
+          <div className="h-px flex-1 bg-gradient-to-r from-transparent to-[#c9a96e]/40" />
+          <p className="font-serif text-lg text-[#c9a96e] italic">Celebrating Us</p>
+          <div className="h-px flex-1 bg-gradient-to-l from-transparent to-[#c9a96e]/40" />
         </div>
-      </div>
+
+        <p className="font-serif text-xl text-[#f5f0e8] text-center italic">
+          Every moment with you is a gift.
+        </p>
+
+        <motion.button
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          className="bg-gradient-to-r from-[#c9a96e] to-[#e8c99a] text-[#080810] font-semibold px-8 py-4 rounded-full hover:shadow-[0_0_24px_rgba(201,169,110,0.4)] transition-all duration-300"
+        >
+          💕 Love You Always
+        </motion.button>
+      </CardExperienceLayout>
     </>
   );
 }
