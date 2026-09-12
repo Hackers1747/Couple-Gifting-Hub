@@ -84,11 +84,11 @@ cron.schedule("* * * * *", async () => {
   );
 
   for (const card of due) {
+    card.whatsapp_sent = true;
     await sendWhatsApp(
       card.receiver_whatsapp,
       `${card.sender_name} sent you something 💝\nheartdrop.in/card/${card.share_token}`
     );
-    card.whatsapp_sent = true;
     // TODO (Supabase): await supabase.from("cards").update({ whatsapp_sent: true }).eq("id", card.id)
     logger.info({ cardId: card.id }, "Scheduled delivery sent");
   }
