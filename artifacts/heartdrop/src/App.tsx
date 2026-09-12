@@ -12,6 +12,7 @@ import Dashboard from "@/pages/Dashboard";
 import Success from "@/pages/Success";
 import ExpiredCard from "@/pages/ExpiredCard";
 import InstallBanner from "@/components/InstallBanner";
+import NetworkStatusBanner from "@/components/NetworkStatusBanner";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +39,7 @@ function App() {
         <WouterRouter base={import.meta.env.BASE_URL.replace(/\/$/, "")}>
           <Router />
           <InstallBanner />
+          <NetworkStatusBanner />
         </WouterRouter>
         <Toaster />
       </TooltipProvider>

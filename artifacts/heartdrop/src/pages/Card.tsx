@@ -24,13 +24,19 @@ function LoadingSpinner() {
   );
 }
 
-function ErrorState() {
+function ErrorState({ onRetry }: { onRetry: () => void }) {
   const [, navigate] = useLocation();
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center justify-center px-6 text-center gap-4">
       <span className="text-5xl">💔</span>
       <h1 className="font-serif text-2xl text-white">Couldn't find this card</h1>
       <p className="text-[#666] text-sm">The link may be broken or the card no longer exists.</p>
+      <button
+        onClick={onRetry}
+        className="rounded-full border border-white/10 px-6 py-3 text-sm font-semibold text-[#D8B0B6] transition-colors hover:bg-white/5"
+      >
+        Try again
+      </button>
       <button
         onClick={() => navigate("/create")}
         className="btn-pill px-6 py-3 text-sm font-semibold text-white mt-2"
@@ -45,7 +51,7 @@ function ErrorState() {
 export default function Card() {
   const { slug } = useParams<{ slug: string }>();
   const [, navigate] = useLocation();
-  const { data, loading, error, trackEvent } = useCardData(slug ?? "");
+  const { data, loading, error, trackEvent, retry } = useCardData(slug ?? "");
 
   const handleReact = (emoji: string) => {
     trackEvent("reacted", { emojiReaction: emoji });
@@ -56,7 +62,7 @@ export default function Card() {
   };
 
   if (loading) return <LoadingSpinner />;
-  if (error || !data) return <ErrorState />;
+  if (error || !data) return <ErrorState onRetry={retry} />;
   if (data.isExpired) {
     navigate("/expired");
     return null;

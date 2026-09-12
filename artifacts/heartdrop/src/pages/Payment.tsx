@@ -1,6 +1,7 @@
 import { useParams, useLocation } from "wouter";
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { AlertCircle, Clock3, LoaderCircle, RefreshCw } from "lucide-react";
 
 declare global {
   interface Window {
@@ -39,16 +40,19 @@ export default function Payment() {
   const { id } = useParams<{ id: string }>();
   const [, navigate] = useLocation();
   const [selectedPlan, setSelectedPlan] = useState("per_card");
-  const [loading, setLoading] = useState(false);
+  const [paymentState, setPaymentState] = useState<
+    "idle" | "creating_order" | "awaiting_payment" | "verifying" | "failed"
+  >("idle");
   const [error, setError] = useState("");
 
   const senderName = new URLSearchParams(window.location.search).get("sender") || "You";
   const recipientName = new URLSearchParams(window.location.search).get("recipient") || "Someone special";
 
   async function openRazorpay() {
-    setLoading(true);
+    setPaymentState("creating_order");
     setError("");
     const plan = PLANS.find((p) => p.id === selectedPlan)!;
+    let verificationStarted = false;
 
     try {
       const orderRes = await fetch("/api/payment/create-order", {
@@ -59,6 +63,7 @@ export default function Payment() {
       const orderData = await orderRes.json();
 
       if (!orderRes.ok) throw new Error(orderData.error || "Order creation failed");
+      if (!window.Razorpay) throw new Error("Payment window is unavailable. Please try again.");
 
       const options = {
         key: import.meta.env.VITE_RAZORPAY_KEY_ID,
@@ -69,6 +74,8 @@ export default function Payment() {
         image: "/favicon.svg",
         order_id: orderData.orderId,
         handler: async (response: any) => {
+          verificationStarted = true;
+          setPaymentState("verifying");
           try {
             const verifyRes = await fetch("/api/payment/verify", {
               method: "POST",
@@ -84,33 +91,56 @@ export default function Payment() {
               }),
             });
             const data = await verifyRes.json();
-            if (data.success) {
+            if (verifyRes.ok && data.success) {
               navigate(`/success?url=${encodeURIComponent(data.shareUrl)}&token=${data.shareToken}&plan=${selectedPlan}&recipient=${encodeURIComponent(recipientName)}`);
             } else {
-              setError("Payment verification failed. Please contact support.");
+              throw new Error(data.error || "Payment verification failed. Please try again.");
             }
-          } catch {
-            setError("Verification error. Please contact support.");
+          } catch (err: any) {
+            setError(err.message || "We couldn’t confirm your payment. Please try again.");
+            setPaymentState("failed");
           }
         },
         prefill: { name: senderName },
         theme: { color: "#B76E79" },
         modal: {
-          ondismiss: () => setLoading(false),
+          ondismiss: () => {
+            if (!verificationStarted) {
+              setPaymentState("idle");
+              setError("Payment window closed before payment was completed.");
+            }
+          },
         },
       };
 
+      setPaymentState("awaiting_payment");
       const rzp = new window.Razorpay(options);
       rzp.on("payment.failed", (resp: any) => {
-        setError("Payment failed: " + resp.error.description);
-        setLoading(false);
+        const description = resp?.error?.description;
+        setError(description ? `Payment failed: ${description}` : "Payment failed. Please try again.");
+        setPaymentState("failed");
       });
       rzp.open();
     } catch (err: any) {
       setError(err.message || "Something went wrong");
-      setLoading(false);
+      setPaymentState("failed");
     }
   }
+
+  const paymentIsActive =
+    paymentState === "creating_order" ||
+    paymentState === "awaiting_payment" ||
+    paymentState === "verifying";
+  const buttonLabel =
+    paymentState === "creating_order"
+      ? "Preparing payment…"
+      : paymentState === "awaiting_payment"
+        ? "Waiting for payment…"
+        : paymentState === "verifying"
+          ? "Confirming payment…"
+          : paymentState === "failed"
+            ? "Try payment again"
+            : `Pay ${PLANS.find((p) => p.id === selectedPlan)?.price}`;
 
   return (
     <div className="min-h-screen bg-[#0A0A0A] flex flex-col items-center px-4 py-12" style={{ maxWidth: 430, margin: "0 auto" }}>
@@ -131,7 +161,11 @@ export default function Payment() {
             <motion.button
               key={plan.id}
               whileTap={{ scale: 0.98 }}
-              onClick={() => setSelectedPlan(plan.id)}
+              onClick={() => {
+                setSelectedPlan(plan.id);
+                setError("");
+                setPaymentState("idle");
+              }}
               className="w-full text-left rounded-2xl border p-4 transition-all relative"
               style={{
                 background: selectedPlan === plan.id ? "rgba(183,110,121,0.12)" : "rgba(255,255,255,0.03)",
@@ -181,22 +215,59 @@ export default function Payment() {
           </div>
         </div>
 
-        {error && (
-          <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="text-red-400 text-sm text-center mb-4">{error}</motion.p>
+        {paymentState === "awaiting_payment" || paymentState === "verifying" ? (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            role="status"
+            aria-live="polite"
+            className="mb-4 flex items-start gap-3 rounded-2xl border border-[#B76E79]/30 bg-[#B76E79]/10 p-4 text-sm text-[#F2D8DC]"
+          >
+            {paymentState === "verifying" ? (
+              <LoaderCircle className="mt-0.5 shrink-0 animate-spin" size={18} aria-hidden="true" />
+            ) : (
+              <Clock3 className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            )}
+            <span>
+              {paymentState === "verifying"
+                ? "Payment received. Confirming it securely…"
+                : "Complete the payment in the Razorpay window. This page will update automatically."}
+            </span>
+          </motion.div>
+        ) : error ? (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            role="alert"
+            className="mb-4 flex items-start gap-3 rounded-2xl border border-[#C0394B]/40 bg-[#C0394B]/10 p-4 text-sm text-[#F4B8BE]"
+          >
+            <AlertCircle className="mt-0.5 shrink-0" size={18} aria-hidden="true" />
+            <span>{error}</span>
+          </motion.div>
+        ) : null}
+
+        {paymentState === "failed" && (
+          <button
+            type="button"
+            onClick={openRazorpay}
+            className="mb-4 inline-flex w-full items-center justify-center gap-2 text-xs font-medium text-[#D8B0B6] hover:text-white"
+          >
+            <RefreshCw size={14} aria-hidden="true" />
+            Retry payment
+          </button>
         )}
 
         <motion.button
           whileTap={{ scale: 0.97 }}
           onClick={openRazorpay}
-          disabled={loading}
+          disabled={paymentIsActive}
           className="w-full py-4 rounded-2xl font-semibold text-white text-base transition-all"
           style={{
-            background: loading ? "rgba(183,110,121,0.4)" : "linear-gradient(135deg, #B76E79 0%, #8B4E5A 100%)",
-            boxShadow: loading ? "none" : "0 4px 24px rgba(183,110,121,0.4)",
+            background: paymentIsActive ? "rgba(183,110,121,0.4)" : "linear-gradient(135deg, #B76E79 0%, #8B4E5A 100%)",
+            boxShadow: paymentIsActive ? "none" : "0 4px 24px rgba(183,110,121,0.4)",
           }}
         >
-          {loading ? "Opening payment…" : `Pay ${PLANS.find((p) => p.id === selectedPlan)?.price}`}
+          {buttonLabel}
         </motion.button>
 
         <p className="text-center text-gray-600 text-xs mt-4">

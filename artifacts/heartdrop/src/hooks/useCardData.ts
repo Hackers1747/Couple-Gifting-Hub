@@ -27,9 +27,16 @@ export function useCardData(token: string) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    if (!token) return;
+  const loadCard = useCallback(() => {
+    if (!token) {
+      setData(null);
+      setError("Card link is missing");
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
+    setError(null);
     fetch(`/api/cards/slug/${token}`)
       .then((r) => {
         if (!r.ok) throw new Error("not found");
@@ -48,6 +55,10 @@ export function useCardData(token: string) {
       .finally(() => setLoading(false));
   }, [token]);
 
+  useEffect(() => {
+    void loadCard();
+  }, [loadCard]);
+
   const trackEvent = useCallback(
     (eventType: string, extra?: Record<string, string>) => {
       if (!data) return;
@@ -60,5 +71,5 @@ export function useCardData(token: string) {
     [data]
   );
 
-  return { data, loading, error, trackEvent };
+  return { data, loading, error, trackEvent, retry: loadCard };
 }
