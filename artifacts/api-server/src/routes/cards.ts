@@ -2,6 +2,10 @@ import { Router, Request, Response } from "express";
 
 const router = Router();
 
+function routeParam(value: string | string[] | undefined): string {
+  return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
+}
+
 // ── Demo card data ────────────────────────────────────────────────────────────
 const EXPERIENCE_MAP: Record<string, string> = {
   sorry:        "sorry",
@@ -67,11 +71,11 @@ router.post("/", (req: Request, res: Response) => {
 });
 
 router.get("/slug/:slug", (req: Request, res: Response) => {
-  res.json(mockCard(req.params.slug));
+  res.json(mockCard(routeParam(req.params.slug)));
 });
 
 router.get("/:id", (req: Request, res: Response) => {
-  res.json(mockCard(req.params.id));
+  res.json(mockCard(routeParam(req.params.id)));
 });
 
 router.patch("/:id", (req: Request, res: Response) => {

@@ -94,10 +94,13 @@ router.post("/", async (req: Request, res: Response) => {
 
 // ─── POST /api/track/open/:cardId  (legacy) ───────────────────────────────────
 router.post("/open/:cardId", (req: Request, res: Response) => {
-  req.log.info({ cardId: req.params.cardId, ...req.body }, "track open (legacy)");
+  const cardId = Array.isArray(req.params.cardId)
+    ? (req.params.cardId[0] ?? "")
+    : req.params.cardId;
+  req.log.info({ cardId, ...req.body }, "track open (legacy)");
   events.push({
     id: `${Date.now()}`,
-    cardId: req.params.cardId,
+    cardId,
     eventType: "opened",
     viewerIp: req.ip,
     createdAt: new Date().toISOString(),

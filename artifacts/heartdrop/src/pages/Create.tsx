@@ -898,6 +898,9 @@ export default function Create() {
         body: JSON.stringify({ ...state, watermarked: true }),
       });
       const data = await res.json();
+      if (!res.ok || !data.token) {
+        throw new Error(data.error || "Card creation failed");
+      }
       navigate(`/card/${data.token ?? "demo"}`);
     } catch {
       navigate("/card/demo");
@@ -909,15 +912,18 @@ export default function Create() {
   const handlePremium = async () => {
     setSubmitting(true);
     try {
-      const res = await fetch("/api/payment/create-order", {
+      const cardRes = await fetch("/api/cards", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: 17900, currency: "INR", cardData: state }),
+        body: JSON.stringify({ ...state, watermarked: false }),
       });
-      const data = await res.json();
-      // Razorpay popup wired in Phase 4
-      console.log("Razorpay order:", data);
-      navigate(`/payment/${data.orderId ?? "demo"}`);
+      const cardData = await cardRes.json();
+      if (!cardRes.ok || !cardData.token) {
+        throw new Error(cardData.error || "Card creation failed");
+      }
+      navigate(
+        `/payment/${encodeURIComponent(cardData.token)}?sender=${encodeURIComponent(state.senderName)}&recipient=${encodeURIComponent(state.recipientName)}`,
+      );
     } catch {
       navigate("/payment/demo");
     } finally {

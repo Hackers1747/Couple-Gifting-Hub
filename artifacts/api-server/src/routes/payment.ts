@@ -109,12 +109,15 @@ router.post("/verify", (req: Request, res: Response) => {
 });
 
 router.get("/status/:orderId", (req: Request, res: Response) => {
-  const payment = payments[req.params.orderId];
+  const orderId = Array.isArray(req.params.orderId)
+    ? (req.params.orderId[0] ?? "")
+    : req.params.orderId;
+  const payment = payments[orderId];
   if (!payment) {
     res.status(404).json({ error: "Order not found" });
     return;
   }
-  res.json({ orderId: req.params.orderId, status: payment.status });
+  res.json({ orderId, status: payment.status });
 });
 
 export default router;
